@@ -87,12 +87,15 @@ class OSBService:
 
         # Open the files with results and start uploading that to prometheus.
         with open(self.results_file) as f:
-            for line in iter(f.readline()):
-                value = self._process_line(line)
-                if not value:
+            # First line is a header, ignore
+            f.readline()
+
+            for line in f:
+                value = self._process_line(line.rstrip())
+                if not value or not value["value"]:
                     continue
                 add_benchmark_metric(
-                    metrics, f"{label}_{value['title'].replace('_').lower()}", extra_labels, f"{value['title']} (value['unit'])", value["unit"]
+                    metrics, f"{label}_{value['title'].replace(' ', '_').lower()}", extra_labels, f"{value['title']} ({value['unit']})", value["value"]
                 )
 
     def stop(self, proc):
@@ -154,14 +157,14 @@ def main(args):
                 # Now, we reinitiate the metrics
                 metrics = {}
 
-            svc.wait_and_process(proc, metrics, "osb", args.extra_labels.split(","))
+            svc.wait_and_process(proc, metrics, "osb", [] if not args.extra_labels else args.extra_labels.split(","))
 
             if (
                 # Either we have reached a timeout
-                (int(time.time()) >= finish_time and initial_time != 0)
+                (int(time.time()) >= finish_time and args.duration != 0)
 
                 # Or the process has finished and --duration != 0 (so, do not keep rerunning)
-                or (initial_time != 0 and proc.poll() is None)
+                or (args.duration != 0 and proc.poll() is None)
             ):
                 # Finish the processing
                 keep_running = False

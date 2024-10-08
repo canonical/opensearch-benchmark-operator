@@ -87,7 +87,7 @@ class DPBenchmarkService:
 
     def is_running(self) -> bool:
         """Checks if the sysbench service is running."""
-        return self.is_prepared() and service_running(self.svc)
+        return self.is_prepared() and service_running(self.SVC_NAME)
 
     def is_stopped(self) -> bool:
         """Checks if the sysbench service has stopped."""
@@ -95,18 +95,18 @@ class DPBenchmarkService:
 
     def is_failed(self) -> bool:
         """Checks if the sysbench service has failed."""
-        return self.is_prepared() and service_failed(self.svc)
+        return self.is_prepared() and service_failed(self.SVC_NAME)
 
     def run(self) -> bool:
         """Run the sysbench service."""
         if self.is_stopped() or self.is_failed():
-            return service_restart(self.svc)
+            return service_restart(self.SVC_NAME)
         return self.is_running()
 
     def stop(self) -> bool:
         """Stop the sysbench service."""
         if self.is_running():
-            return service_stop(self.svc)
+            return service_stop(self.SVC_NAME)
         return self.is_stopped()
 
     def unset(self) -> bool:

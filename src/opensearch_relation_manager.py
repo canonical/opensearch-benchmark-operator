@@ -8,12 +8,12 @@ from abc import abstractmethod
 from typing import List, Optional
 
 from charms.data_platform_libs.v0.data_interfaces import OpenSearchRequires
-from benchmark.constants import (
-    INDEX_NAME,
-)
 from ops.charm import CharmBase, CharmEvents
 from ops.framework import EventBase, EventSource
 
+from benchmark.constants import (
+    INDEX_NAME,
+)
 from benchmark.relation_manager import DatabaseRelationManager
 
 logger = logging.getLogger(__name__)

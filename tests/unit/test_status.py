@@ -27,8 +27,6 @@ OPENSEARCH_APP_NAME = "opensearch"
 @pytest.fixture
 def harness():
     harness = Harness(OpenSearchBenchmarkOperator, meta=METADATA, config=CONFIG, actions=ACTIONS)
-
-    harness._update_config({"log_level": "INFO"})
     harness.begin()
 
     return harness

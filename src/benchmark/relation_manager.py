@@ -12,15 +12,16 @@ import logging
 from abc import abstractmethod
 from typing import List, Optional
 
+from ops.charm import CharmBase, CharmEvents
+from ops.framework import EventBase, EventSource, Object
+from ops.model import ModelError, Relation
+
 from benchmark.constants import (
     DatabaseRelationStatus,
     DPBenchmarkBaseDatabaseModel,
     DPBenchmarkExecutionModel,
     DPBenchmarkMultipleRelationsToDBError,
 )
-from ops.charm import CharmBase, CharmEvents
-from ops.framework import EventBase, EventSource, Object
-from ops.model import ModelError, Relation
 
 logger = logging.getLogger(__name__)
 

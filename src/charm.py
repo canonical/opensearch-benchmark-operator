@@ -23,13 +23,13 @@ import ops
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from overrides import override
 
+from benchmark.benchmark_charm import DPBenchmarkCharm
 from benchmark.constants import (
-    DPBenchmarkExecError,
     DatabaseRelationStatus,
+    DPBenchmarkExecError,
     DPBenchmarkMissingOptionsError,
 )
 from opensearch_relation_manager import OpenSearchDatabaseRelationManager
-from benchmark.benchmark_charm import DPBenchmarkCharm
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
