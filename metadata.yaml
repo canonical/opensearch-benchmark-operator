@@ -1,11 +1,13 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
-name: sysbench
-display-name: Charmed Sysbench
+name: opensearch-benchmark
+display-name: Charmed OpenSearch Benchmark
 
-summary: Generates a load against your workload and collect metrics in Prometheus.
+summary: Generates a load against your workload and collect performance metrics to Prometheus.
 description: |
-  Run this charm to connect with a mysql deployment and test the performance or generate a load against the cluster.
+  Run this charm to connect with an opensearch deployment and test the performance or generate a load against the cluster.
+
+# TODO: Update
 docs: https://discourse.charmhub.io/t/charmed-sysbench-documentation-home/13945
 source: https://github.com/canonical/sysbench-operator
 issues: https://github.com/canonical/sysbench-operator/issues
@@ -15,7 +17,7 @@ maintainers:
 
 peers:
   benchmark-peer:
-    interface: sysbench_peers
+    interface: benchmark-peers
 
 provides:
   cos-agent:
@@ -23,9 +25,6 @@ provides:
     limit: 1
 
 requires:
-  mysql:
-    interface: mysql_client
-    limit: 1
-  postgresql:
-    interface: postgresql_client
+  opensearch:
+    interface: opensearch_client
     limit: 1

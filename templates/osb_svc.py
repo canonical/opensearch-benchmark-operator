@@ -2,7 +2,7 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""This method runs the sysbench call, collects its output and forwards to prometheus."""
+"""This method runs the opensearch-benchmark call, collects its output and forwards to prometheus."""
 
 import sys
 import os
@@ -13,41 +13,29 @@ import subprocess
 from prometheus_client import Gauge, start_http_server
 
 
-class SysbenchService:
-    """Sysbench service class."""
+class OSBService:
+    """OpenSearch Benchmark service class."""
 
     def __init__(
         self,
-        tpcc_script: str,
-        threads: int,
-        tables: int,
-        scale: int,
-        db_driver: str,
-        db_name: str,
+        target_hosts: list[str],
+        pipeline: str,
+        workload: str,
+        workload_params: str,
         db_user: str,
         db_password: str,
-        db_host: str,
-        db_port: int,
-        db_socket: str,
+        *,
+        kill_running_processes: bool = True,
         duration: int = 0,
+        extra_client_options: dict[str, str] = {},
     ):
-        self.tpcc_script = tpcc_script
-        driver = "mysql" if db_driver == "mysql" else "pgsql"
-        socket = (
-            f"--{driver}-host={db_host} --{driver}-port={db_port}"
-            if len(db_socket) == 0
-            else f"--{driver}-socket={db_socket}"
-        )
-        self.sysbench = f"/usr/bin/sysbench {tpcc_script} --threads={threads} --tables={tables} --scale={scale} --db-driver={driver} --report-interval=10 --time={duration} "
-        if db_driver == "mysql":
-            self.sysbench += f"--force_pk=1 --mysql-db={db_name} --mysql-user={db_user} --mysql-password={db_password} {socket}"
-        elif db_driver == "postgresql":
-            self.sysbench += f"--pgsql-db={db_name} --pgsql-user={db_user} --pgsql-password={db_password} {socket}"
-        else:
-            raise Exception("Wrong db driver chosen")
+        self.osb = f"""/usr/bin/opensearch-benchmark execute-test
+         --workload {workload}
+         --target-hosts {' '.join(target_hosts)}
+         --tables={tables} --scale={scale} --db-driver={driver} --report-interval=10 --time={duration} """
 
     def _exec(self, cmd):
-        subprocess.check_output(self.sysbench.split(" ") + cmd, timeout=86400)
+        subprocess.check_output(self.osb.split(" ") + cmd, timeout=86400)
 
     def prepare(self):
         """Prepare the sysbench output."""

@@ -2,12 +2,14 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""This connects the sysbench service to the database and the grafana agent.
+"""This class implements the generic benchmark workflow.
 
-The first action after installing the sysbench charm and relating it to the different
+The charm should inherit from this class and implement only the specifics for its own tool.
+
+The first action after installing the benchmark charm and relating it to the different
 apps, is to prepare the db. The user must run the prepare action to create the database.
 
-The prepare action will run the sysbench prepare command to create the database and, at its
+The prepare action will run the prepare command to create the database and, at its
 end, it sets a systemd target informing the service is ready.
 
 The next step is to execute the run action. This action renders the systemd service file and
@@ -24,31 +26,33 @@ from typing import Dict, List
 import ops
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.operator_libs_linux.v0 import apt
-from ops import main
 
-from constants import (
+from benchmark.constants import (
     COS_AGENT_RELATION,
     METRICS_PORT,
     PEER_RELATION,
-    DatabaseRelationStatusEnum,
-    MultipleRelationsToDBError,
-    SysbenchExecError,
-    SysbenchExecStatusEnum,
-    SysbenchIsInWrongStateError,
-    SysbenchMissingOptionsError,
+    DatabaseRelationStatus,
+    DPBenchmarkExecError,
+    DPBenchmarkExecStatus,
+    DPBenchmarkMultipleRelationsToDBError,
+    DPBenchmarkMissingOptionsError,
+    DPBenchmarkIsInWrongStateError,
 )
 from benchmark.relation_manager import DatabaseRelationManager
-from sysbench import SysbenchService, SysbenchStatus
+from benchmark.service import DPBenchmarkService
+from benchmark.status import DPBenchmarkStatus
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 
 
-class SysbenchOperator(ops.CharmBase):
-    """Charm the service."""
+class DPBenchmark(ops.Object):
+    """The main benchmark class."""
 
-    def __init__(self, *args):
-        super().__init__(*args)
+    SERVICE_CLS = DPBenchmarkService
+
+    def __init__(self, db_relations: list[str]):
+        super().__init__(*db_relations)
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
         self.framework.observe(self.on.prepare_action, self.on_prepare_action)
@@ -59,32 +63,33 @@ class SysbenchOperator(ops.CharmBase):
         self.framework.observe(self.on[PEER_RELATION].relation_joined, self._on_peer_changed)
         self.framework.observe(self.on[PEER_RELATION].relation_changed, self._on_peer_changed)
 
-        self.database = DatabaseRelationManager(self, ["mysql", "postgresql"])
         self.framework.observe(self.database.on.db_config_update, self._on_config_changed)
 
+        self.database = DatabaseRelationManager(self, db_relations)
         self._grafana_agent = COSAgentProvider(
             self,
             scrape_configs=self.scrape_config,
             refresh_events=[],
         )
-        self.sysbench_status = SysbenchStatus(self, PEER_RELATION, SysbenchService())
+
+        self.benchmark_status = DatabaseRelationStatus(self, PEER_RELATION, self.SERVICE_CLS())
         self.labels = ",".join([self.model.name, self.unit.name])
 
-    def _set_sysbench_status(self) -> SysbenchExecStatusEnum:
+    def _set_status(self) -> DPBenchmarkExecStatus:
         """Recovers the sysbench status."""
         status = self.sysbench_status.check()
-        if status == SysbenchExecStatusEnum.ERROR:
-            self.unit.status = ops.model.BlockedStatus("Sysbench failed, please check logs")
-        elif status == SysbenchExecStatusEnum.UNSET:
+        if status == DPBenchmarkExecStatus.ERROR:
+            self.unit.status = ops.model.BlockedStatus("Benchmark failed, please check logs")
+        elif status == DPBenchmarkExecStatus.UNSET:
             self.unit.status = ops.model.ActiveStatus()
-        if status == SysbenchExecStatusEnum.PREPARED:
+        if status == DPBenchmarkExecStatus.PREPARED:
             self.unit.status = ops.model.WaitingStatus(
                 "Sysbench is prepared: execute run to start"
             )
-        if status == SysbenchExecStatusEnum.RUNNING:
-            self.unit.status = ops.model.ActiveStatus("Sysbench is running")
-        if status == SysbenchExecStatusEnum.STOPPED:
-            self.unit.status = ops.model.BlockedStatus("Sysbench is stopped after run")
+        if status == DPBenchmarkExecStatus.RUNNING:
+            self.unit.status = ops.model.ActiveStatus("Benchmark is running")
+        if status == DPBenchmarkExecStatus.STOPPED:
+            self.unit.status = ops.model.BlockedStatus("Benchmark is stopped after run")
 
     def __del__(self):
         """Set status for the operator and finishes the service.
@@ -95,16 +100,16 @@ class SysbenchOperator(ops.CharmBase):
         """
         try:
             status = self.database.check()
-        except MultipleRelationsToDBError:
+        except DPBenchmarkMultipleRelationsToDBError:
             self.unit.status = ops.model.BlockedStatus("Multiple DB relations at once forbidden!")
             return
-        if status == DatabaseRelationStatusEnum.NOT_AVAILABLE:
+        if status == DPBenchmarkExecStatus.NOT_AVAILABLE:
             self.unit.status = ops.model.BlockedStatus("No database relation available")
             return
-        if status == DatabaseRelationStatusEnum.AVAILABLE:
+        if status == DPBenchmarkExecStatus.AVAILABLE:
             self.unit.status = ops.model.WaitingStatus("Waiting on data from relation")
             return
-        if status == DatabaseRelationStatusEnum.ERROR:
+        if status == DPBenchmarkExecStatus.ERROR:
             self.unit.status = ops.model.BlockedStatus(
                 "Unexpected error with db relation: check logs"
             )
@@ -119,13 +124,11 @@ class SysbenchOperator(ops.CharmBase):
     @property
     def _unit_ip(self) -> str:
         """Current unit ip."""
-        return self.model.get_binding(COS_AGENT_RELATION).network.bind_address
+        return self.model.get_binding(PEER_RELATION).network.bind_address
 
     def _on_config_changed(self, _):
-        # For now, ignore the configuration
-        svc = SysbenchService()
+        svc = self.SERVICE_CLS()
         if svc.is_running():
-            # Nothing to do, there was no setup yet
             svc.stop()
             if not (options := self.database.get_execution_options()):
                 # Nothing to do, we can abandon this event and wait for the next changes
@@ -136,7 +139,7 @@ class SysbenchOperator(ops.CharmBase):
             svc.run()
 
     def _on_relation_broken(self, _):
-        SysbenchService().stop()
+        self.SERVICE_CLS().stop()
 
     def scrape_config(self) -> List[Dict]:
         """Generate scrape config for the Patroni metrics endpoint."""
@@ -165,17 +168,17 @@ class SysbenchOperator(ops.CharmBase):
         """Peer relation changed."""
         if (
             not self.unit.is_leader()
-            and self.sysbench_status.app_status() == SysbenchExecStatusEnum.PREPARED
+            and self.sysbench_status.app_status() == DPBenchmarkExecStatus.PREPARED
             and self.sysbench_status.service_status()
-            not in [SysbenchExecStatusEnum.PREPARED, SysbenchExecStatusEnum.RUNNING]
+            not in [DPBenchmarkExecStatus.PREPARED, DPBenchmarkExecStatus.RUNNING]
         ):
             # We need to mark this unit as prepared so we can rerun the script later
-            self.sysbench_status.set(SysbenchExecStatusEnum.PREPARED)
+            self.sysbench_status.set(DPBenchmarkExecStatus.PREPARED)
 
     def _execute_sysbench_cmd(self, extra_labels, command: str):
         """Execute the sysbench command."""
         if not (db := self.database.get_execution_options()):
-            raise SysbenchMissingOptionsError("Missing database options")
+            raise DPBenchmarkMissingOptionsError("Missing database options")
         try:
             output = subprocess.check_output(
                 [
@@ -199,15 +202,15 @@ class SysbenchOperator(ops.CharmBase):
             )
         except subprocess.CalledProcessError as e:
             logger.warning(f"Process failed with: {e}")
-            self.sysbench_status.set(SysbenchExecStatusEnum.ERROR)
-            raise SysbenchExecError()
+            self.sysbench_status.set(DPBenchmarkExecStatus.ERROR)
+            raise DPBenchmarkExecError()
         logger.debug("Sysbench output: %s", output)
 
-    def check(self, event=None) -> SysbenchExecStatusEnum:
+    def check(self, event=None) -> DPBenchmarkExecStatus:
         """Wraps the status check and catches the wrong state error for processing."""
         try:
             return self.sysbench_status.check()
-        except SysbenchIsInWrongStateError:
+        except DPBenchmarkIsInWrongStateError:
             # This error means we have a new app_status change coming down via peer relation
             # and we did not receive it yet. Defer the upstream event
             if event:
@@ -228,20 +231,20 @@ class SysbenchOperator(ops.CharmBase):
                 f"Failed: app level reports {self.sysbench_status.app_status()} and service level reports {self.sysbench_status.service_status()}"
             )
             return
-        if status != SysbenchExecStatusEnum.UNSET:
+        if status != DPBenchmarkExecStatus.UNSET:
             event.fail("Failed: sysbench is already prepared, stop and clean up the cluster first")
 
         self.unit.status = ops.model.MaintenanceStatus("Running prepare command...")
         try:
             self._execute_sysbench_cmd(self.labels, "prepare")
-        except SysbenchMissingOptionsError:
+        except DPBenchmarkMissingOptionsError:
             event.fail("Failed: missing database options")
             return
-        except SysbenchExecError:
+        except DPBenchmarkExecError:
             event.fail("Failed: error in sysbench while executing prepare")
             return
-        SysbenchService().finished_preparing()
-        self.sysbench_status.set(SysbenchExecStatusEnum.PREPARED)
+        self.SERVICE_CLS().prepare()
+        self.sysbench_status.set(DPBenchmarkExecStatus.PREPARED)
         event.set_results({"status": "prepared"})
 
     def on_run_action(self, event):
@@ -251,17 +254,17 @@ class SysbenchOperator(ops.CharmBase):
                 f"Failed: app level reports {self.sysbench_status.app_status()} and service level reports {self.sysbench_status.service_status()}"
             )
             return
-        if status == SysbenchExecStatusEnum.ERROR:
+        if status == DPBenchmarkExecStatus.ERROR:
             logger.warning("Overriding ERROR status and restarting service")
         elif status not in [
-            SysbenchExecStatusEnum.PREPARED,
-            SysbenchExecStatusEnum.STOPPED,
+            DPBenchmarkExecStatus.PREPARED,
+            DPBenchmarkExecStatus.STOPPED,
         ]:
             event.fail("Failed: sysbench is not prepared")
             return
 
         self.unit.status = ops.model.MaintenanceStatus("Setting up benchmark")
-        svc = SysbenchService()
+        svc = self.SERVICE_CLS()
         svc.stop()
         if not (options := self.database.get_execution_options()):
             event.fail("Failed: missing database options")
@@ -270,7 +273,7 @@ class SysbenchOperator(ops.CharmBase):
             self.database.script(), self.database.chosen_db_type(), options, labels=self.labels
         )
         svc.run()
-        self.sysbench_status.set(SysbenchExecStatusEnum.RUNNING)
+        self.sysbench_status.set(DPBenchmarkExecStatus.RUNNING)
         event.set_results({"status": "running"})
 
     def on_stop_action(self, event):
@@ -280,12 +283,12 @@ class SysbenchOperator(ops.CharmBase):
                 f"Failed: app level reports {self.sysbench_status.app_status()} and service level reports {self.sysbench_status.service_status()}"
             )
             return
-        if status != SysbenchExecStatusEnum.RUNNING:
+        if status != DPBenchmarkExecStatus.RUNNING:
             event.fail("Failed: sysbench is not running")
             return
-        svc = SysbenchService()
+        svc = self.SERVICE_CLS()
         svc.stop()
-        self.sysbench_status.set(SysbenchExecStatusEnum.STOPPED)
+        self.sysbench_status.set(DPBenchmarkExecStatus.STOPPED)
         event.set_results({"status": "stopped"})
 
     def on_clean_action(self, event):
@@ -298,25 +301,65 @@ class SysbenchOperator(ops.CharmBase):
                 f"Failed: app level reports {self.sysbench_status.app_status()} and service level reports {self.sysbench_status.service_status()}"
             )
             return
-        svc = SysbenchService()
-        if status == SysbenchExecStatusEnum.UNSET:
+        svc = self.SERVICE_CLS()
+        if status == DPBenchmarkExecStatus.UNSET:
             logger.warning("Sysbench units are idle, but continuing anyways")
-        if status == SysbenchExecStatusEnum.RUNNING:
+        if status == DPBenchmarkExecStatus.RUNNING:
             logger.info("Sysbench service stopped in clean action")
             svc.stop()
 
         self.unit.status = ops.model.MaintenanceStatus("Cleaning up database")
         try:
             self._execute_sysbench_cmd(self.labels, "clean")
-        except SysbenchMissingOptionsError:
+        except DPBenchmarkMissingOptionsError:
             event.fail("Failed: missing database options")
             return
-        except SysbenchExecError:
+        except DPBenchmarkExecError:
             event.fail("Failed: error in sysbench while executing clean")
             return
         svc.unset()
-        self.sysbench_status.set(SysbenchExecStatusEnum.UNSET)
+        self.sysbench_status.set(DPBenchmarkExecStatus.UNSET)
 
 
-if __name__ == "__main__":
-    main(SysbenchOperator)
+class DPBenchmarkOptionsFactory(ops.Object):
+    """Renders the database options and abstracts the main charm from the db type details.
+
+    It uses the data coming from both relation and config.
+    """
+
+    def __init__(self, charm, database_relation):
+        self.charm = charm
+        self.database_relation = database_relation
+
+    @property
+    def relation_data(self):
+        """Returns the relation data."""
+        return list(self.database_relation.fetch_relation_data().values())[0]
+
+    def get_database_options(self) -> Dict[str, Any]:
+        """Returns the database options."""
+        endpoints = self.relation_data.get("endpoints")
+
+        unix_socket, host, port = None, None, None
+        if endpoints.startswith("file://"):
+            unix_socket = endpoints[7:]
+        else:
+            host, port = endpoints.split(":")
+
+        return DPBenchmarkBaseDatabaseModel(
+            hosts=,
+            port=port,
+            unix_socket=unix_socket,
+            username=self.relation_data.get("username"),
+            password=self.relation_data.get("password"),
+            dsn= # self.relation_data.get("database"),
+            scale=self.charm.config.get("scale"),
+        )
+
+    def get_execution_options(self) -> DPBenchmarkExecutionModel:
+        """Returns the execution options."""
+        return DPBenchmarkExecutionModel(
+            threads=self.charm.config.get("threads"),
+            duration=self.charm.config.get("duration"),
+            db_info=self.get_database_options(),
+        )

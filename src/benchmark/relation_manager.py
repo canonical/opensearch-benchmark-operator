@@ -19,10 +19,10 @@ from ops.model import ModelError, Relation
 
 from constants import (
     DATABASE_NAME,
-    DatabaseRelationStatusEnum,
-    MultipleRelationsToDBError,
-    SysbenchBaseDatabaseModel,
-    SysbenchExecutionModel,
+    DatabaseRelationStatus,
+    DPBenchmarkMultipleRelationsToDBError,
+    DPBenchmarkBaseDatabaseModel,
+    DPBenchmarkExecutionModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,35 +66,35 @@ class DatabaseRelationManager(Object):
             )
             self.framework.observe(self.charm.on[rel].relation_broken, self._on_endpoints_changed)
 
-    def relation_status(self, relation_name) -> DatabaseRelationStatusEnum:
+    def relation_status(self, relation_name) -> DatabaseRelationStatus:
         """Returns the current relation status."""
         relation = self.charm.model.relations[relation_name]
         if len(relation) > 1:
-            raise MultipleRelationsToDBError()
+            raise DPBenchmarkMultipleRelationsToDBError()
         elif len(relation) == 0:
-            return DatabaseRelationStatusEnum.NOT_AVAILABLE
+            return DatabaseRelationStatus.NOT_AVAILABLE
         if self._is_relation_active(relation[0]):
             # Relation exists and we have some data
             # Try to create an options object and see if it fails
             try:
-                SysbenchOptionsFactory(
+                DPBenchmarkOptionsFactory(
                     self.charm, self.relations[relation_name]
                 ).get_database_options()
             except Exception as e:
                 logger.debug("Failed relation options check %s" % e)
             else:
                 # We have data to build the config object
-                return DatabaseRelationStatusEnum.CONFIGURED
-        return DatabaseRelationStatusEnum.AVAILABLE
+                return DatabaseRelationStatus.CONFIGURED
+        return DatabaseRelationStatus.AVAILABLE
 
-    def check(self) -> DatabaseRelationStatusEnum:
+    def check(self) -> DatabaseRelationStatus:
         """Returns the current status of all the relations, aggregated."""
-        status = DatabaseRelationStatusEnum.NOT_AVAILABLE
+        status = DatabaseRelationStatus.NOT_AVAILABLE
         for rel in self.relations.keys():
-            if self.relation_status(rel) != DatabaseRelationStatusEnum.NOT_AVAILABLE:
-                if status != DatabaseRelationStatusEnum.NOT_AVAILABLE:
+            if self.relation_status(rel) != DatabaseRelationStatus.NOT_AVAILABLE:
+                if status != DatabaseRelationStatus.NOT_AVAILABLE:
                     # It means we have the same relation to more than one DB
-                    raise MultipleRelationsToDBError()
+                    raise DPBenchmarkMultipleRelationsToDBError()
                 status = self.relation_status(rel)
         return status
 
@@ -107,7 +107,7 @@ class DatabaseRelationManager(Object):
             logger.debug("Failed relation status check %s" % e)
             return False
 
-    def get_db_config(self) -> Optional[SysbenchBaseDatabaseModel]:
+    def get_db_config(self) -> Optional[DPBenchmarkBaseDatabaseModel]:
         """Checks each relation: if there is a valid relation, build its options and return.
 
         This class does not raise: MultipleRelationsToSameDBTypeError. It either returns the
@@ -115,8 +115,8 @@ class DatabaseRelationManager(Object):
         to manage the final status of the charm only.
         """
         for rel, requirer in self.relations.items():
-            if self.relation_status(rel) == DatabaseRelationStatusEnum.CONFIGURED:
-                return SysbenchOptionsFactory(self.charm, requirer).get_database_options()
+            if self.relation_status(rel) == DatabaseRelationStatus.CONFIGURED:
+                return DatabaseRelationStatus(self.charm, requirer).get_database_options()
 
         return None
 
@@ -124,13 +124,13 @@ class DatabaseRelationManager(Object):
         """Handles the endpoints_changed event."""
         self.on.db_config_update.emit()
 
-    def get_execution_options(self) -> Optional[SysbenchExecutionModel]:
+    def get_execution_options(self) -> Optional[DPBenchmarkExecutionModel]:
         """Returns the execution options."""
         if not (db := self.get_db_config()):
             # It means we are not yet ready. Return None
             # This check also serves to ensure we have only one valid relation at the time
             return None
-        return SysbenchExecutionModel(
+        return DPBenchmarkExecutionModel(
             threads=self.charm.config.get("threads"),
             duration=self.charm.config.get("duration"),
             db_info=db,
@@ -140,8 +140,8 @@ class DatabaseRelationManager(Object):
         """Returns the chosen DB type."""
         for rel in self.relations.keys():
             if self.relation_status(rel) in [
-                DatabaseRelationStatusEnum.AVAILABLE,
-                DatabaseRelationStatusEnum.CONFIGURED,
+                DatabaseRelationStatus.AVAILABLE,
+                DatabaseRelationStatus.CONFIGURED,
             ]:
                 return rel
         return None
@@ -154,48 +154,3 @@ class DatabaseRelationManager(Object):
         elif db_type == "postgresql":
             return str(os.path.abspath("scripts/pgsql.lua"))
         return None
-
-
-class SysbenchOptionsFactory(Object):
-    """Renders the database options and abstracts the main charm from the db type details.
-
-    It uses the data coming from both relation and config.
-    """
-
-    def __init__(self, charm, database_relation):
-        self.charm = charm
-        self.database_relation = database_relation
-
-    @property
-    def relation_data(self):
-        """Returns the relation data."""
-        return list(self.database_relation.fetch_relation_data().values())[0]
-
-    def get_database_options(self) -> Dict[str, Any]:
-        """Returns the database options."""
-        endpoints = self.relation_data.get("endpoints")
-
-        unix_socket, host, port = None, None, None
-        if endpoints.startswith("file://"):
-            unix_socket = endpoints[7:]
-        else:
-            host, port = endpoints.split(":")
-
-        return SysbenchBaseDatabaseModel(
-            host=host,
-            port=port,
-            unix_socket=unix_socket,
-            username=self.relation_data.get("username"),
-            password=self.relation_data.get("password"),
-            db_name=self.relation_data.get("database"),
-            tables=self.charm.config.get("tables"),
-            scale=self.charm.config.get("scale"),
-        )
-
-    def get_execution_options(self) -> SysbenchExecutionModel:
-        """Returns the execution options."""
-        return SysbenchExecutionModel(
-            threads=self.charm.config.get("threads"),
-            duration=self.charm.config.get("duration"),
-            db_info=self.get_database_options(),
-        )
