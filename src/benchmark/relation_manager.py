@@ -8,22 +8,22 @@ The charm interacts with the manager and requests data + listen to some key even
 as changes in the configuration.
 """
 
+from abc import abstractmethod
 import logging
 import os
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from charms.data_platform_libs.v0.data_interfaces import DatabaseRequires
-from ops.charm import CharmBase, CharmEvents
-from ops.framework import EventBase, EventSource, Object
-from ops.model import ModelError, Relation
-
+from charms.data_platform_libs.v0.data_interfaces import OpenSearchRequires
 from constants import (
     DATABASE_NAME,
     DatabaseRelationStatus,
-    DPBenchmarkMultipleRelationsToDBError,
     DPBenchmarkBaseDatabaseModel,
     DPBenchmarkExecutionModel,
+    DPBenchmarkMultipleRelationsToDBError,
 )
+from ops.charm import CharmBase, CharmEvents
+from ops.framework import EventBase, EventSource, Object
+from ops.model import ModelError, Relation
 
 logger = logging.getLogger(__name__)
 
@@ -52,14 +52,6 @@ class DatabaseRelationManager(Object):
         self.charm = charm
         self.relations = {}
         for rel in relation_names:
-            self.relations[rel] = DatabaseRequires(
-                self.charm,
-                rel,
-                DATABASE_NAME,
-                external_node_connectivity=self.charm.config.get(
-                    "request-external-connectivity", False
-                ),
-            )
             self.framework.observe(
                 getattr(self.relations[rel].on, "endpoints_changed"),
                 self._on_endpoints_changed,
@@ -77,9 +69,11 @@ class DatabaseRelationManager(Object):
             # Relation exists and we have some data
             # Try to create an options object and see if it fails
             try:
-                DPBenchmarkOptionsFactory(
-                    self.charm, self.relations[relation_name]
-                ).get_database_options()
+                for rel, requirer in self.relations.items():
+                    if self.relation_status(rel) == DatabaseRelationStatus.CONFIGURED:
+                        DatabaseRelationStatus(self.charm, requirer).get_database_options()
+                        # We've managed to create at least one database relation, leave the loop
+                        break
             except Exception as e:
                 logger.debug("Failed relation options check %s" % e)
             else:
@@ -146,11 +140,7 @@ class DatabaseRelationManager(Object):
                 return rel
         return None
 
+    @abstractmethod
     def script(self) -> Optional[str]:
         """Returns the script path for the chosen DB."""
-        db_type = self.chosen_db_type()
-        if db_type == "mysql":
-            return str(os.path.abspath("scripts/mysql.lua"))
-        elif db_type == "postgresql":
-            return str(os.path.abspath("scripts/pgsql.lua"))
-        return None
+        pass

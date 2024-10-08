@@ -30,9 +30,9 @@ class OSBService:
     ):
         self.results_file = f"/tmp/osb_results_{int(time.time())}.csv"
 
-        self.osb_args = f"""--target-hosts {','.join(target_hosts)}
+        self.osb_args = f""" --workload {workload}
+         --target-hosts {','.join(target_hosts)}
          --pipeline benchmark-only
-         --workload-params {workload_params}
          --client-options basic_auth_user:{db_user},basic_auth_password:{db_password},verify_certs:false,max_connections:2000,timeout:600
          --results-format csv --results-file {self.results_file}
          --show-in-results all"""
@@ -41,19 +41,18 @@ class OSBService:
             self.osb_args += " --kill-running-processes"
 
         if workload_params:
-            self.osb_args += f"--workload {workload}"
+            self.osb_args += f" --workload_params {workload_params}"
         self.duration = duration
 
-    def _exec(self, cmd):
-        subprocess.check_output(f"""/usr/bin/opensearch-benchmark {cmd}""" + self.osb_args, timeout=self.duration)
+    def cmd(self, runtype):
+        return f"""/usr/local/bin/opensearch-benchmark {runtype} """ + self.osb_args
+
+    def _exec(self, runtype):
+        subprocess.check_output(self.cmd(runtype).split(), timeout=86400)
 
     def start(self):
         """Start the OSB benchmark."""
         self._exec("execute-test")
-
-    def prepare(self):
-        """Prepare the OSB output."""
-        pass
 
     def _process_line(self, line):
         # Processes line in format: Metric,Task,Value,Unit
@@ -66,15 +65,26 @@ class OSBService:
             "unit": line.split(",")[3],
         }
 
-    def run(self, proc, metrics, label, extra_labels):
+    def wait_and_process(self, proc, metrics, label, extra_labels):
         """Run one step of the main benchmark service loop."""
-        for _ in iter(proc.stdout.readline, ""):
+        for line in iter(proc.stdout.readline, ""):
             # Dummy line reader
             # OpenSearch Benchmark prints status of its execution only
             # We are more interested to know when is it finished to run
+            #
+            #  print(f"STDOUT: {line}")
             time.sleep(5)
+            if proc.poll() is not None:
+                # Process has finished
+                break
 
         # We are now finished.
+        # Check if the result files is present
+        if not os.path.exists(self.results_file):
+            # We will clean up the metrics and leave
+            metrics = {}
+            return
+
         # Open the files with results and start uploading that to prometheus.
         with open(self.results_file) as f:
             for line in iter(f.readline()):
@@ -113,11 +123,10 @@ def main(args):
         keep_running = False  # noqa: F841
 
     svc = OSBService(
-        target_hosts=args.target_hosts,
+        target_hosts=args.target_hosts.split(","),
         workload=args.workload,
         db_user=args.db_user,
         db_password=args.db_password,
-        results_file=args.results_file,
         kill_running_processes=True,
         duration=args.duration,
         workload_params=args.workload_params,
@@ -127,25 +136,34 @@ def main(args):
     signal.signal(signal.SIGTERM, _exit)
     start_http_server(8088)
 
-    if args.command == "prepare":
-        svc.prepare()
-        keep_running = False  # Gracefully shutdown
-    elif args.command == "run":
-        proc = subprocess.Popen(
-            svc.sysbench.start(),
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            universal_newlines=True,
-        )
-        metrics = {}
-
+    if args.command == "run":
         initial_time = int(time.time())
         finish_time = initial_time + args.duration
+        metrics = {}
+        while keep_running:
+            proc = subprocess.Popen(
+                svc.cmd("execute-test").split(),
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                universal_newlines=True,
+            )
+            if metrics:
+                # Keep the results for 10 minutes
+                time.sleep(600)
+                # Now, we reinitiate the metrics
+                metrics = {}
 
-        while keep_running and proc.poll() is None:
-            svc.run(proc, metrics, f"osb", args.extra_labels.split(","))
-            if int(time.time()) >= finish_time:
+            svc.wait_and_process(proc, metrics, "osb", args.extra_labels.split(","))
+
+            if (
+                # Either we have reached a timeout
+                (int(time.time()) >= finish_time and initial_time != 0)
+
+                # Or the process has finished and --duration != 0 (so, do not keep rerunning)
+                or (initial_time != 0 and proc.poll() is None)
+            ):
+                # Finish the processing
                 keep_running = False
 
         print(f"benchmark STDOUT: {proc.stdout.read()}")
@@ -179,9 +197,9 @@ if __name__ == "__main__":
     parser.add_argument("--db_user", type=str)
     parser.add_argument("--db_password", type=str)
     parser.add_argument("--duration", type=int, default=0)
-    parser.add_argument("--workload_params", type=str, default="./osb_benchmark.json")
+    parser.add_argument("--workload_params", type=str, default=None)
     parser.add_argument(
-        "--extra_labels", type=str, help="comma-separated list of extra labels to be used."
+        "--extra_labels", type=str, help="comma-separated list of extra labels to be used.", default=""
     )
 
     args = parser.parse_args()

@@ -1,8 +1,10 @@
-import ops
-from typing import Any, Dict
+from typing import Any
 
-from benchmark.service import BenchmarkService
+import ops
+
 from benchmark.constants import DPBenchmarkExecStatus, DPBenchmarkIsInWrongStateError
+from benchmark.service import BenchmarkService
+
 
 class BenchmarkStatus(ops.Object):
     """Renders the sysbench status updates the relation databag."""

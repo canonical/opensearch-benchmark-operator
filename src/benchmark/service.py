@@ -3,8 +3,9 @@
 
 """This module contains the benchmark service."""
 
-from abc import abstractmethod
 import os
+from abc import abstractmethod
+import shutil
 from typing import Any, Dict, Optional
 
 from charms.operator_libs_linux.v1.systemd import (
@@ -37,7 +38,7 @@ def _render(src_template_file: str, dst_filepath: str, values: Dict[str, Any]):
 
 
 class DPBenchmarkService:
-    """Represents the sysbench service."""
+    """Represents the benchmark service."""
 
     def __init__(
         self,
@@ -50,25 +51,26 @@ class DPBenchmarkService:
         """Returns the path to the service file."""
         return f"/etc/systemd/system/{self.svc}.service"
 
+    def render_service_executable(self) -> bool:
+        shutil.copyfile("templates/sysbench_svc.py", "/usr/bin/sysbench_svc.py")
+        os.chmod("/usr/bin/sysbench_svc", 0o755)
+
     def render_service_file(
-        self, script: str, db_type: str, db: DPBenchmarkExecutionModel, labels: Optional[str] = ""
+        self, db: DPBenchmarkExecutionModel, labels: Optional[str] = ""
     ) -> bool:
         """Render the systemd service file."""
         _render(
             SYSTEM_SVC + ".j2",
             self.svc_path,
             {
-                "db_driver": db_type,
+                "target_hosts": db.db_info.hosts,
+                "workload": db.db_info.workload_name,
                 "threads": db.threads,
-                "tables": db.db_info.tables,
-                "db_name": db.db_info.db_name,
+                "clients": db.clients,
                 "db_user": db.db_info.username,
                 "db_password": db.db_info.password,
-                "db_host": db.db_info.host,
-                "db_port": db.db_info.port,
-                "db_socket": db.db_info.unix_socket,
                 "duration": db.duration,
-                "script_path": script,
+                "workload_params": db.db_info.workload_params,
                 "extra_labels": labels,
             },
         )

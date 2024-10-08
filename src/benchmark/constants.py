@@ -50,8 +50,8 @@ class DPBenchmarkBaseDatabaseModel(BaseModel):
     unix_socket: Optional[str]
     username: str
     password: str
-    db_name: str
-    tables: int
+    workload_name: str
+    workload_params: dict[str, str]
 
     @root_validator()
     @classmethod
@@ -59,7 +59,7 @@ class DPBenchmarkBaseDatabaseModel(BaseModel):
         """Validate if missing params."""
         missing_param = []
         # Check if the required fields are present
-        for f in ["username", "password", "db_name", "hosts"]:
+        for f in ["username", "password", "workload_name"]:
             if f not in field_values or field_values[f] is None:
                 missing_param.append(f)
         if missing_param:
@@ -97,6 +97,7 @@ class DPBenchmarkExecutionModel(BaseModel):
 
     threads: int
     duration: int
+    clients: int
     db_info: DPBenchmarkBaseDatabaseModel
 
 
