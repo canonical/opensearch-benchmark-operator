@@ -13,10 +13,9 @@ the user.
 This charm should also be the main entry point to all the modelling of your benchmark tool.
 """
 
-from abc import abstractmethod
 import logging
 import os
-import shutil
+from abc import abstractmethod
 from typing import Dict, List
 
 import ops
@@ -24,16 +23,15 @@ from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from charms.operator_libs_linux.v0 import apt
 
 from benchmark.constants import (
-    DPBenchmarkBaseDatabaseModel,
     COS_AGENT_RELATION,
     METRICS_PORT,
     PEER_RELATION,
     DatabaseRelationStatus,
     DPBenchmarkExecError,
     DPBenchmarkExecStatus,
-    DPBenchmarkMultipleRelationsToDBError,
-    DPBenchmarkMissingOptionsError,
     DPBenchmarkIsInWrongStateError,
+    DPBenchmarkMissingOptionsError,
+    DPBenchmarkMultipleRelationsToDBError,
 )
 from benchmark.relation_manager import DatabaseRelationManager
 from benchmark.service import DPBenchmarkService
@@ -42,9 +40,8 @@ from benchmark.service import DPBenchmarkService
 logger = logging.getLogger(__name__)
 
 
-class DPBenchmarkCharm(ops.Object):
+class DPBenchmarkCharm(ops.CharmBase):
     """The main benchmark class."""
-
 
     def __init__(self, db_relations: list[str]):
         super().__init__(*db_relations)

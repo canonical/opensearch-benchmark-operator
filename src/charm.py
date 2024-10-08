@@ -17,27 +17,25 @@ the user.
 
 import logging
 import os
-from overrides import overrides
-import shutil
 import subprocess
-from typing import Dict, List
 
 import ops
 from charms.grafana_agent.v0.cos_agent import COSAgentProvider
-from charms.operator_libs_linux.v0 import apt
-from benchmark.constants import (
-    SysbenchExecError,
-    SysbenchExecStatusEnum,
-    SysbenchMissingOptionsError,
-)
+from overrides import override
 
+from benchmark.constants import (
+    DPBenchmarkExecError,
+    DatabaseRelationStatus,
+    DPBenchmarkMissingOptionsError,
+)
 from opensearch_relation_manager import OpenSearchDatabaseRelationManager
+from benchmark.benchmark_charm import DPBenchmarkCharm
 
 # Log messages can be retrieved using juju debug-log
 logger = logging.getLogger(__name__)
 
 
-class OpenSearchBenchmarkOperator(ops.CharmBase):
+class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
     """Charm the service."""
 
     def __init__(self, *args):
@@ -65,7 +63,7 @@ class OpenSearchBenchmarkOperator(ops.CharmBase):
     def _execute_benchmark_cmd(self, extra_labels, command: str):
         """Execute the benchmark command."""
         if not (db := self.database.get_execution_options()):
-            raise SysbenchMissingOptionsError("Missing database options")
+            raise DPBenchmarkMissingOptionsError("Missing database options")
         try:
             output = subprocess.check_output(
                 [
@@ -85,8 +83,8 @@ class OpenSearchBenchmarkOperator(ops.CharmBase):
             )
         except subprocess.CalledProcessError as e:
             logger.warning(f"Process failed with: {e}")
-            self.sysbench_status.set(SysbenchExecStatusEnum.ERROR)
-            raise SysbenchExecError()
+            self.sysbench_status.set(DatabaseRelationStatus.ERROR)
+            raise DPBenchmarkExecError()
         logger.debug("Sysbench output: %s", output)
 
 

@@ -1,15 +1,21 @@
+#!/usr/bin/env python3
+# Copyright 2024 Canonical Ltd.
+# See LICENSE file for licensing details.
+
+"""This class summarizes the status of the benchmark run."""
+
 from typing import Any
 
 import ops
 
 from benchmark.constants import DPBenchmarkExecStatus, DPBenchmarkIsInWrongStateError
-from benchmark.service import BenchmarkService
+from benchmark.service import DPBenchmarkService
 
 
 class BenchmarkStatus(ops.Object):
     """Renders the sysbench status updates the relation databag."""
 
-    def __init__(self, charm: ops.charm.CharmBase, relation: str, svc: BenchmarkService):
+    def __init__(self, charm: ops.charm.CharmBase, relation: str, svc: DPBenchmarkService):
         self.charm = charm
         self.svc = svc
         self.relation = relation

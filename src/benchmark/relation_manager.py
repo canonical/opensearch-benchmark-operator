@@ -8,14 +8,11 @@ The charm interacts with the manager and requests data + listen to some key even
 as changes in the configuration.
 """
 
-from abc import abstractmethod
 import logging
-import os
+from abc import abstractmethod
 from typing import List, Optional
 
-from charms.data_platform_libs.v0.data_interfaces import OpenSearchRequires
-from constants import (
-    DATABASE_NAME,
+from benchmark.constants import (
     DatabaseRelationStatus,
     DPBenchmarkBaseDatabaseModel,
     DPBenchmarkExecutionModel,

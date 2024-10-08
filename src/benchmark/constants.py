@@ -12,10 +12,9 @@ from pydantic import BaseModel, root_validator
 VALID_LOG_LEVELS = ["info", "debug", "warning", "error", "critical"]
 
 
-METRICS_PORT = 8088
-SYSTEM_SVC = "data_platform_benchmark"
-SYSTEM_PATH = f"/etc/systemd/system/{SYSTEM_SVC}.service"
+INDEX_NAME = "benchmark_index"
 
+METRICS_PORT = 8088
 COS_AGENT_RELATION = "cos-agent"
 PEER_RELATION = "benchmark-peer"
 
@@ -45,6 +44,7 @@ class DPBenchmarkBaseDatabaseModel(BaseModel):
 
     Holds all the details of the sysbench database.
     """
+
     # List of host:port pairs to use for connecting to the database.
     hosts: Optional[list[str]]
     unix_socket: Optional[str]
@@ -112,6 +112,7 @@ class DPBenchmarkExecStatus(Enum):
     UNSET means waiting for prepare to be executed. STOPPED means the sysbench is ready
     but the service is not running.
     """
+
     UNSET = "unset"
     PREPARED = "prepared"
     RUNNING = "running"

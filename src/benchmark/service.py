@@ -4,8 +4,8 @@
 """This module contains the benchmark service."""
 
 import os
-from abc import abstractmethod
 import shutil
+from abc import abstractmethod
 from typing import Any, Dict, Optional
 
 from charms.operator_libs_linux.v1.systemd import (
@@ -18,7 +18,6 @@ from charms.operator_libs_linux.v1.systemd import (
 from jinja2 import Environment, FileSystemLoader, exceptions
 
 from .constants import (
-    SYSTEM_SVC,
     DPBenchmarkExecutionModel,
 )
 
@@ -40,27 +39,28 @@ def _render(src_template_file: str, dst_filepath: str, values: Dict[str, Any]):
 class DPBenchmarkService:
     """Represents the benchmark service."""
 
-    def __init__(
-        self,
-        svc_name: str = SYSTEM_SVC,
-    ):
-        self.svc = svc_name
+    SVC_NAME = "dpe_benchmark"
+    SVC_EXECUTABLE_PATH = "/usr/bin/"
+    SVC_PATH = f"/etc/systemd/system/{SVC_NAME}.service"
 
     @property
     def svc_path(self) -> str:
         """Returns the path to the service file."""
-        return f"/etc/systemd/system/{self.svc}.service"
+        return self.SVC_PATH
 
     def render_service_executable(self) -> bool:
-        shutil.copyfile("templates/sysbench_svc.py", "/usr/bin/sysbench_svc.py")
-        os.chmod("/usr/bin/sysbench_svc", 0o755)
+        """Render the sysbench service executable."""
+        shutil.copyfile(
+            "templates/" + self.SVC_NAME + ".py", self.SVC_EXECUTABLE_PATH + self.SVC_NAME + ".py"
+        )
+        os.chmod(self.SVC_EXECUTABLE_PATH + self.SVC_NAME + ".py", 0o755)
 
     def render_service_file(
         self, db: DPBenchmarkExecutionModel, labels: Optional[str] = ""
     ) -> bool:
         """Render the systemd service file."""
         _render(
-            SYSTEM_SVC + ".j2",
+            "templates/" + self.SVC_NAME + ".service.j2",
             self.svc_path,
             {
                 "target_hosts": db.db_info.hosts,
@@ -91,11 +91,7 @@ class DPBenchmarkService:
 
     def is_stopped(self) -> bool:
         """Checks if the sysbench service has stopped."""
-        return (
-            self.is_prepared()
-            and not self.is_running()
-            and not self.is_failed()
-        )
+        return self.is_prepared() and not self.is_running() and not self.is_failed()
 
     def is_failed(self) -> bool:
         """Checks if the sysbench service has failed."""

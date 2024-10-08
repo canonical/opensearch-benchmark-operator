@@ -3,21 +3,16 @@
 
 """This module provides a single API set for database management."""
 
-from abc import abstractmethod
 import logging
+from abc import abstractmethod
 from typing import List, Optional
 
 from charms.data_platform_libs.v0.data_interfaces import OpenSearchRequires
-from constants import (
+from benchmark.constants import (
     INDEX_NAME,
-    DatabaseRelationStatus,
-    DPBenchmarkBaseDatabaseModel,
-    DPBenchmarkExecutionModel,
-    DPBenchmarkMultipleRelationsToDBError,
 )
 from ops.charm import CharmBase, CharmEvents
-from ops.framework import EventBase, EventSource, Object
-from ops.model import ModelError, Relation
+from ops.framework import EventBase, EventSource
 
 from benchmark.relation_manager import DatabaseRelationManager
 
@@ -59,16 +54,6 @@ class OpenSearchDatabaseRelationManager(DatabaseRelationManager):
                 self._on_endpoints_changed,
             )
             self.framework.observe(self.charm.on[rel].relation_broken, self._on_endpoints_changed)
-
-    def chosen_db_type(self) -> Optional[str]:
-        """Returns the chosen DB type."""
-        for rel in self.relations.keys():
-            if self.relation_status(rel) in [
-                DatabaseRelationStatus.AVAILABLE,
-                DatabaseRelationStatus.CONFIGURED,
-            ]:
-                return rel
-        return None
 
     @abstractmethod
     def script(self) -> Optional[str]:
