@@ -1,7 +1,7 @@
-# sysbench-operator
+# opensearch-benchmark-operator
 
-Connect your database to sysbench and run a benchmark.
+Connect your database to opensearch-benchmark and runs a workload.
 
 *WARNING*: should not be executed against a production environment.
 
-More information, check our documentation: https://charmhub.io/sysbench
+More information, check our documentation: https://charmhub.io/opensearch-benchmark

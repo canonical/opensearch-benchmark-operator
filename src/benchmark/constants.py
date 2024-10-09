@@ -50,6 +50,7 @@ class DPBenchmarkBaseDatabaseModel(BaseModel):
     unix_socket: Optional[str]
     username: str
     password: str
+    db_name: str
     workload_name: str
     workload_params: dict[str, str]
 
@@ -64,14 +65,13 @@ class DPBenchmarkBaseDatabaseModel(BaseModel):
                 missing_param.append(f)
         if missing_param:
             raise DPBenchmarkMissingOptionsError(f"{missing_param}")
-
         if os.path.exists(field_values.get("unix_socket") or ""):
-            field_values["host"] = ""
+            field_values["hosts"] = ""
         else:
             field_values["unix_socket"] = ""
 
         # Check if we have the correct endpoint
-        if not field_values.get("host") and not field_values.get("unix_socket"):
+        if not field_values.get("hosts") and not field_values.get("unix_socket"):
             raise DPBenchmarkMissingOptionsError("Missing endpoint as unix_socket OR host:port")
         return field_values
 
@@ -102,7 +102,7 @@ class DPBenchmarkExecutionModel(BaseModel):
 
 
 class DPBenchmarkExecStatus(Enum):
-    """Sysbench execution status.
+    """Benchmark execution status.
 
     The state-machine is the following:
     UNSET -> PREPARED -> RUNNING -> STOPPED -> UNSET

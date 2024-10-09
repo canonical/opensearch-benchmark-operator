@@ -47,7 +47,12 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
     @override
     def _setup_db_relation(self, relation_names: list[str]):
         """Setup the database relation."""
-        self.database = OpenSearchDatabaseRelationManager(self, relation_names)
+        self.database = OpenSearchDatabaseRelationManager(
+            self,
+            relation_names,
+            workload_name=self.config["workload_name"],
+            workload_params=self._generate_workload_params(),
+        )
         self.framework.observe(self.database.on.db_config_update, self._on_config_changed)
 
     @override
@@ -86,6 +91,9 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
             self.sysbench_status.set(DatabaseRelationStatus.ERROR)
             raise DPBenchmarkExecError()
         logger.debug("Sysbench output: %s", output)
+
+    def _generate_workload_params(self):
+        return {}
 
 
 if __name__ == "__main__":

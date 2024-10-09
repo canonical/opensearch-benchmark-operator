@@ -14,7 +14,7 @@ from typing import List, Optional
 
 from ops.charm import CharmBase, CharmEvents
 from ops.framework import EventBase, EventSource, Object
-from ops.model import ModelError, Relation
+from ops.model import Relation
 
 from benchmark.constants import (
     DatabaseRelationStatus,
@@ -43,12 +43,25 @@ class DatabaseRelationManager(Object):
     well as the current relation status.
     """
 
+    DATABASE_KEY = "database"
+
     on = DatabaseManagerEvents()  # pyright: ignore [reportGeneralTypeIssues]
 
-    def __init__(self, charm: CharmBase, relation_names: List[str]):
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_names: List[str] | None,
+        *,
+        workload_name: str = None,
+        workload_params: dict[str, str] = {},
+    ):
         super().__init__(charm, None)
         self.charm = charm
+        self.workload_name = workload_name
+        self.workload_params = workload_params
         self.relations = {}
+
+    def _setup_relations(self, relation_names: List[str]):
         for rel in relation_names:
             self.framework.observe(self.charm.on[rel].relation_joined, self._on_endpoints_changed)
             self.framework.observe(self.charm.on[rel].relation_changed, self._on_endpoints_changed)
@@ -61,21 +74,35 @@ class DatabaseRelationManager(Object):
             raise DPBenchmarkMultipleRelationsToDBError()
         elif len(relation) == 0:
             return DatabaseRelationStatus.NOT_AVAILABLE
-        if self._is_relation_active(relation[0]):
+        if self._relation_has_data(relation[0]):
             # Relation exists and we have some data
             # Try to create an options object and see if it fails
             try:
-                for rel, requirer in self.relations.items():
-                    if self.relation_status(rel) == DatabaseRelationStatus.CONFIGURED:
-                        DatabaseRelationStatus(self.charm, requirer).get_database_options()
-                        # We've managed to create at least one database relation, leave the loop
-                        break
+                self.get_database_options()
             except Exception as e:
                 logger.debug("Failed relation options check %s" % e)
             else:
                 # We have data to build the config object
                 return DatabaseRelationStatus.CONFIGURED
         return DatabaseRelationStatus.AVAILABLE
+
+    def get_database_options(self) -> DPBenchmarkBaseDatabaseModel:
+        """Returns the database options."""
+        endpoints = self.relation_data.get("endpoints")
+
+        unix_socket = None
+        if endpoints.startswith("file://"):
+            unix_socket = endpoints[7:]
+
+        return DPBenchmarkBaseDatabaseModel(
+            hosts=endpoints.split(),
+            unix_socket=unix_socket,
+            username=self.relation_data.get("username"),
+            password=self.relation_data.get("password"),
+            db_name=self.relation_data.get(self.DATABASE_KEY),
+            workload_name=self.workload_name,
+            workload_params=self.workload_params,
+        )
 
     def check(self) -> DatabaseRelationStatus:
         """Returns the current status of all the relations, aggregated."""
@@ -88,27 +115,9 @@ class DatabaseRelationManager(Object):
                 status = self.relation_status(rel)
         return status
 
-    def _is_relation_active(self, relation: Relation):
+    def _relation_has_data(self, relation: Relation) -> bool:
         """Whether the relation is active based on contained data."""
-        try:
-            _ = repr(relation.data)
-            return True
-        except (RuntimeError, ModelError) as e:
-            logger.debug("Failed relation status check %s" % e)
-            return False
-
-    def get_db_config(self) -> Optional[DPBenchmarkBaseDatabaseModel]:
-        """Checks each relation: if there is a valid relation, build its options and return.
-
-        This class does not raise: MultipleRelationsToSameDBTypeError. It either returns the
-        data of the first valid relation or just returns None. The error above must be used
-        to manage the final status of the charm only.
-        """
-        for rel, requirer in self.relations.items():
-            if self.relation_status(rel) == DatabaseRelationStatus.CONFIGURED:
-                return DatabaseRelationStatus(self.charm, requirer).get_database_options()
-
-        return None
+        return relation.data.get(relation.app, {}) != {}
 
     def _on_endpoints_changed(self, _):
         """Handles the endpoints_changed event."""
@@ -116,13 +125,14 @@ class DatabaseRelationManager(Object):
 
     def get_execution_options(self) -> Optional[DPBenchmarkExecutionModel]:
         """Returns the execution options."""
-        if not (db := self.get_db_config()):
+        if not (db := self.get_database_options()):
             # It means we are not yet ready. Return None
             # This check also serves to ensure we have only one valid relation at the time
             return None
         return DPBenchmarkExecutionModel(
             threads=self.charm.config.get("threads"),
             duration=self.charm.config.get("duration"),
+            clients=self.charm.config.get("clients"),
             db_info=db,
         )
 
@@ -135,6 +145,12 @@ class DatabaseRelationManager(Object):
             ]:
                 return rel
         return None
+
+    @property
+    @abstractmethod
+    def relation_data(self):
+        """Returns the relation data."""
+        pass
 
     @abstractmethod
     def script(self) -> Optional[str]:

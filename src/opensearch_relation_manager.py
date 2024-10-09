@@ -4,12 +4,12 @@
 """This module provides a single API set for database management."""
 
 import logging
-from abc import abstractmethod
 from typing import List, Optional
 
 from charms.data_platform_libs.v0.data_interfaces import OpenSearchRequires
 from ops.charm import CharmBase, CharmEvents
 from ops.framework import EventBase, EventSource
+from overrides import override
 
 from benchmark.constants import (
     INDEX_NAME,
@@ -36,23 +36,32 @@ class OpenSearchDatabaseRelationManager(DatabaseRelationManager):
     well as the current relation status.
     """
 
-    on = DatabaseManagerEvents()  # pyright: ignore [reportGeneralTypeIssues]
+    DATABASE_KEY = "index"
 
-    def __init__(self, charm: CharmBase, relation_names: List[str]):
-        super().__init__(charm, relation_names)
-        for rel in relation_names:
-            self.relations[rel] = OpenSearchRequires(
-                self.charm,
-                rel,
-                INDEX_NAME,
-            )
-            self.framework.observe(
-                getattr(self.relations[rel].on, "endpoints_changed"),
-                self._on_endpoints_changed,
-            )
-            self.framework.observe(self.charm.on[rel].relation_broken, self._on_endpoints_changed)
+    def __init__(
+        self,
+        charm: CharmBase,
+        relation_names: List[str] | None,
+        *,
+        workload_name: str = None,
+        workload_params: dict[str, str] = {},
+    ):
+        super().__init__(
+            charm, ["opensearch"], workload_name=workload_name, workload_params=workload_params
+        )
+        self.relations["opensearch"] = OpenSearchRequires(
+            charm,
+            "opensearch",
+            INDEX_NAME,
+        )
+        self._setup_relations(["opensearch"])
 
-    @abstractmethod
+    @property
+    def relation_data(self):
+        """Returns the relation data."""
+        return list(self.relations["opensearch"].fetch_relation_data().values())[0]
+
+    @override
     def script(self) -> Optional[str]:
         """Returns the script path for the chosen DB."""
         pass

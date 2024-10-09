@@ -4,19 +4,18 @@ options:
     type: int
     description: |
       Number of concurrent threads that will perform the test.
-  tables:
+  clients:
     default: 8
     type: int
     description: |
-      Number of tables involved in the testing.
+      Number of concurrent clients submitting transactions involved in the testing.
   duration:
     default: 0
     type: int
     description: |
       Duration of the test in seconds. If set to 0, it does not stop.
-  request-external-connectivity:
-    default: True
-    type: boolean
+  workload_name:
+    default: "nyc_taxis"
+    type: string
     description: |
-      Whenever a CMR is used to the database relations, then this
-      unit will add the request for external_node_connectivity=True.
+      Name of the workload to use.
