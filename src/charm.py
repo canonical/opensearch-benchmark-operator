@@ -2,12 +2,12 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-"""This connects the sysbench service to the database and the grafana agent.
+"""This connects the benchmark service to the database and the grafana agent.
 
-The first action after installing the sysbench charm and relating it to the different
+The first action after installing the benchmark charm and relating it to the different
 apps, is to prepare the db. The user must run the prepare action to create the database.
 
-The prepare action will run the sysbench prepare command to create the database and, at its
+The prepare action will run the benchmark prepare command to create the database and, at its
 end, it sets a systemd target informing the service is ready.
 
 The next step is to execute the run action. This action renders the systemd service file and
@@ -65,6 +65,25 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
         subprocess.check_output("pip3 install opensearch-benchmark".split())
 
     @override
+    def on_prepare_action(self, event):
+        """Prepare the benchmark service."""
+        if not self.unit.is_leader():
+            event.fail("Failed: only leader can prepare the database")
+            return
+        if not (status := self.check()):
+            event.fail(
+                f"Failed: app level reports {self.benchmark_status.app_status()} and service level reports {self.benchmark_status.service_status()}"
+            )
+            return
+        if status != DatabaseRelationStatus.UNSET:
+            event.fail(
+                "Failed: benchmark is already prepared, stop and clean up the cluster first"
+            )
+        if not self._setup_service():
+            event.fail("Failed: missing database options")
+        event.set_results({"status": "prepared"})
+
+    @override
     def _execute_benchmark_cmd(self, extra_labels, command: str):
         """Execute the benchmark command."""
         if not (db := self.database.get_execution_options()):
@@ -88,9 +107,9 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
             )
         except subprocess.CalledProcessError as e:
             logger.warning(f"Process failed with: {e}")
-            self.sysbench_status.set(DatabaseRelationStatus.ERROR)
+            self.benchmark_status.set(DatabaseRelationStatus.ERROR)
             raise DPBenchmarkExecError()
-        logger.debug("Sysbench output: %s", output)
+        logger.debug("benchmark output: %s", output)
 
     def _generate_workload_params(self):
         return {}
