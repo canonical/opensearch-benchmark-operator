@@ -13,7 +13,7 @@ from benchmark.service import DPBenchmarkService
 
 
 class BenchmarkStatus(ops.Object):
-    """Renders the sysbench status updates the relation databag."""
+    """Renders the benchmark status updates the relation databag."""
 
     def __init__(self, charm: ops.charm.CharmBase, relation: str, svc: DPBenchmarkService):
         self.charm = charm

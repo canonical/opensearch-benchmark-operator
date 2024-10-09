@@ -49,7 +49,7 @@ class DPBenchmarkService:
         return self.SVC_PATH
 
     def render_service_executable(self) -> bool:
-        """Render the sysbench service executable."""
+        """Render the benchmark service executable."""
         shutil.copyfile(
             "templates/" + self.SVC_NAME + ".py", self.SVC_EXECUTABLE_PATH + self.SVC_NAME + ".py"
         )
@@ -86,31 +86,31 @@ class DPBenchmarkService:
         pass
 
     def is_running(self) -> bool:
-        """Checks if the sysbench service is running."""
+        """Checks if the benchmark service is running."""
         return self.is_prepared() and service_running(self.SVC_NAME)
 
     def is_stopped(self) -> bool:
-        """Checks if the sysbench service has stopped."""
+        """Checks if the benchmark service has stopped."""
         return self.is_prepared() and not self.is_running() and not self.is_failed()
 
     def is_failed(self) -> bool:
-        """Checks if the sysbench service has failed."""
+        """Checks if the benchmark service has failed."""
         return self.is_prepared() and service_failed(self.SVC_NAME)
 
     def run(self) -> bool:
-        """Run the sysbench service."""
+        """Run the benchmark service."""
         if self.is_stopped() or self.is_failed():
             return service_restart(self.SVC_NAME)
         return self.is_running()
 
     def stop(self) -> bool:
-        """Stop the sysbench service."""
+        """Stop the benchmark service."""
         if self.is_running():
             return service_stop(self.SVC_NAME)
         return self.is_stopped()
 
     def unset(self) -> bool:
-        """Unset the sysbench service."""
+        """Unset the benchmark service."""
         try:
             result = self.stop()
             os.remove(self.svc_path)

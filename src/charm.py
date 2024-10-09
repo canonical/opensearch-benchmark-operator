@@ -20,7 +20,6 @@ import os
 import subprocess
 
 import ops
-from charms.grafana_agent.v0.cos_agent import COSAgentProvider
 from overrides import override
 
 from benchmark.benchmark_charm import DPBenchmarkCharm
@@ -42,19 +41,20 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
         super().__init__(*args)
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
+        self.labels = ",".join([self.model.name, self.unit.name])
+        self._setup_db_relation(["opensearch"])
 
-        self.database = OpenSearchDatabaseRelationManager(self)
+    @override
+    def _setup_db_relation(self, relation_names: list[str]):
+        """Setup the database relation."""
+        self.database = OpenSearchDatabaseRelationManager(self, relation_names)
         self.framework.observe(self.database.on.db_config_update, self._on_config_changed)
 
-        self._grafana_agent = COSAgentProvider(
-            self,
-            scrape_configs=self.scrape_config,
-            refresh_events=[],
-        )
-        self.labels = ",".join([self.model.name, self.unit.name])
-
+    @override
     def _on_install(self, event):
-        super()._on_install(event, extra_packages=["python3-pip"])
+        super()._on_install(event)
+        self._install_packages(["python3-pip"])
+
         if os.path.exists("/usr/lib/python3.12/EXTERNALLY-MANAGED"):
             os.remove("/usr/lib/python3.12/EXTERNALLY-MANAGED")
         subprocess.check_ouput("pip3 install opensearch-benchmark".split())

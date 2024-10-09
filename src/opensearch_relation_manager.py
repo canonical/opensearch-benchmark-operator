@@ -39,15 +39,12 @@ class OpenSearchDatabaseRelationManager(DatabaseRelationManager):
     on = DatabaseManagerEvents()  # pyright: ignore [reportGeneralTypeIssues]
 
     def __init__(self, charm: CharmBase, relation_names: List[str]):
-        super().__init__(charm, None, relation_names)
+        super().__init__(charm, relation_names)
         for rel in relation_names:
             self.relations[rel] = OpenSearchRequires(
                 self.charm,
                 rel,
                 INDEX_NAME,
-                external_node_connectivity=self.charm.config.get(
-                    "request-external-connectivity", False
-                ),
             )
             self.framework.observe(
                 getattr(self.relations[rel].on, "endpoints_changed"),

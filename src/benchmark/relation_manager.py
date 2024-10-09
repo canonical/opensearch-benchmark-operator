@@ -50,10 +50,8 @@ class DatabaseRelationManager(Object):
         self.charm = charm
         self.relations = {}
         for rel in relation_names:
-            self.framework.observe(
-                getattr(self.relations[rel].on, "endpoints_changed"),
-                self._on_endpoints_changed,
-            )
+            self.framework.observe(self.charm.on[rel].relation_joined, self._on_endpoints_changed)
+            self.framework.observe(self.charm.on[rel].relation_changed, self._on_endpoints_changed)
             self.framework.observe(self.charm.on[rel].relation_broken, self._on_endpoints_changed)
 
     def relation_status(self, relation_name) -> DatabaseRelationStatus:

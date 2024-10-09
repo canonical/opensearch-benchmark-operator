@@ -3,11 +3,9 @@
 # See LICENSE file for licensing details.
 
 import logging
-from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
-import yaml
 from ops.testing import Harness
 
 from benchmark.constants import DPBenchmarkExecStatus
@@ -17,28 +15,26 @@ from charm import OpenSearchBenchmarkOperator
 
 logger = logging.getLogger(__name__)
 
-CONFIG = str(yaml.safe_load(Path("./config.yaml").read_text()))
-ACTIONS = str(yaml.safe_load(Path("./actions.yaml").read_text()))
-METADATA = str(yaml.safe_load(Path("./metadata.yaml").read_text()))
-
 OPENSEARCH_APP_NAME = "opensearch"
 
 
 @pytest.fixture
 def harness():
-    harness = Harness(OpenSearchBenchmarkOperator, meta=METADATA, config=CONFIG, actions=ACTIONS)
-    harness.begin()
+    harness = Harness(OpenSearchBenchmarkOperator)
+    with patch("ops.model.Model.name", new_callable=PropertyMock) as mock_name:
+        mock_name.return_value = "test_model"
+        harness.begin()
 
     return harness
 
 
 def test_app_status(harness):
-    relation_name = "benchmark-relation"
+    relation_name = "opensearch"
     svc = MagicMock(DPBenchmarkService)
     charm = harness.charm
     benchmark_status = BenchmarkStatus(charm, relation_name, svc)
 
-    harness.add_relation(relation_name, "benchmark-app")
+    harness.add_relation(relation_name, "opensearch")
     relation = harness.model.get_relation(relation_name)
     relation.data[charm.app]["status"] = DPBenchmarkExecStatus.RUNNING.value
 
@@ -46,12 +42,12 @@ def test_app_status(harness):
 
 
 def test_unit_status(harness):
-    relation_name = "benchmark-relation"
+    relation_name = "opensearch"
     svc = MagicMock(DPBenchmarkService)
     charm = harness.charm
     benchmark_status = BenchmarkStatus(charm, relation_name, svc)
 
-    harness.add_relation(relation_name, "benchmark-app")
+    harness.add_relation(relation_name, "opensearch")
     relation = harness.model.get_relation(relation_name)
     relation.data[charm.unit]["status"] = DPBenchmarkExecStatus.RUNNING.value
 
@@ -59,12 +55,12 @@ def test_unit_status(harness):
 
 
 def test_set_status(harness):
-    relation_name = "benchmark-relation"
+    relation_name = "opensearch"
     svc = MagicMock(DPBenchmarkService)
     charm = harness.charm
     benchmark_status = BenchmarkStatus(charm, relation_name, svc)
 
-    harness.add_relation(relation_name, "benchmark-app")
+    harness.add_relation(relation_name, "opensearch")
     relation = harness.model.get_relation(relation_name)
     harness.set_leader(True)
 
@@ -74,12 +70,12 @@ def test_set_status(harness):
 
 
 def test_has_error_happened(harness):
-    relation_name = "benchmark-relation"
+    relation_name = "opensearch"
     svc = MagicMock(DPBenchmarkService)
     charm = harness.charm
     benchmark_status = BenchmarkStatus(charm, relation_name, svc)
 
-    harness.add_relation(relation_name, "benchmark-app")
+    harness.add_relation(relation_name, "opensearch")
     relation = harness.model.get_relation(relation_name)
     relation.data[charm.unit]["status"] = DPBenchmarkExecStatus.ERROR.value
 
@@ -87,7 +83,7 @@ def test_has_error_happened(harness):
 
 
 def test_service_status(harness):
-    relation_name = "benchmark-relation"
+    relation_name = "opensearch"
     svc = MagicMock(DPBenchmarkService)
     svc.is_prepared.return_value = True
     svc.is_failed.return_value = False
@@ -101,12 +97,12 @@ def test_service_status(harness):
 
 
 def test_check_status(harness):
-    relation_name = "benchmark-relation"
+    relation_name = "opensearch"
     svc = MagicMock(DPBenchmarkService)
     charm = harness.charm
     benchmark_status = BenchmarkStatus(charm, relation_name, svc)
 
-    harness.add_relation(relation_name, "benchmark-app")
+    harness.add_relation(relation_name, "opensearch")
     relation = harness.model.get_relation(relation_name)
     harness.set_leader(True)
 
