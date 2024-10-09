@@ -14,7 +14,6 @@ This charm should also be the main entry point to all the modelling of your benc
 """
 
 import logging
-import os
 from abc import abstractmethod
 from typing import Dict, List
 
@@ -139,10 +138,9 @@ class DPBenchmarkCharm(ops.CharmBase):
             svc.stop()
             if not (options := self.database.get_execution_options()):
                 # Nothing to do, we can abandon this event and wait for the next changes
+                # Status will be handled at the end of the event
                 return
-            svc.render_service_file(
-                self.database.script(), self.database.chosen_db_type(), options, labels=self.labels
-            )
+            svc.render_service_file(self.database.script(), options, labels=self.labels)
             svc.run()
 
     def _on_relation_broken(self, _):
@@ -264,7 +262,7 @@ class DPBenchmarkCharm(ops.CharmBase):
 
         self.unit.status = ops.model.MaintenanceStatus("Cleaning up database")
         try:
-            self._execute_sysbench_cmd(self.labels, "clean")
+            self._execute_benchmark_cmd(self.labels, "clean")
         except DPBenchmarkMissingOptionsError:
             event.fail("Failed: missing database options")
             return
@@ -278,4 +276,3 @@ class DPBenchmarkCharm(ops.CharmBase):
     def _execute_benchmark_cmd(self, extra_labels, command: str):
         """Execute the benchmark command."""
         pass
-        os.chmod("/usr/bin/sysbench_svc.py", 0o700)

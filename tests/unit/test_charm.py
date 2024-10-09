@@ -2,52 +2,46 @@
 # Copyright 2024 Canonical Ltd.
 # See LICENSE file for licensing details.
 
-# import logging
-# from pathlib import Path
+from unittest.mock import PropertyMock, patch
 
-# import pytest
-# import yaml
-# from ops.testing import Harness
+import pytest
+from ops.model import ActiveStatus
+from ops.testing import Harness
 
-# from charm import OpensearchDasboardsCharm
-
-# logger = logging.getLogger(__name__)
-
-# CONFIG = str(yaml.safe_load(Path("./config.yaml").read_text()))
-# ACTIONS = str(yaml.safe_load(Path("./actions.yaml").read_text()))
-# METADATA = str(yaml.safe_load(Path("./metadata.yaml").read_text()))
-
-# OPENSEARCH_APP_NAME = "opensearch"
+from benchmark.benchmark_charm import (
+    DatabaseRelationStatus,
+)
+from charm import OpenSearchBenchmarkOperator
 
 
-# @pytest.fixture
-# def harness():
-#     harness = Harness(OpensearchDasboardsCharm, meta=METADATA, config=CONFIG, actions=ACTIONS)
+@pytest.fixture
+def harness():
+    harness = Harness(OpenSearchBenchmarkOperator)
 
-#     harness._update_config({"log_level": "INFO"})
-#     harness.begin()
+    with patch("ops.model.Model.name", new_callable=PropertyMock) as mock_name:
+        mock_name.return_value = "test_model"
+        harness.begin()
 
-#     return harness
+    return harness
 
 
-# def set_healthy_opensearch_connection(harness):
-#     """Set up a functional opensearch mock."""
-#     opensearch_rel_id = harness.add_relation(OPENSEARCH_REL_NAME, "opensearch")
-#     harness.add_relation_unit(opensearch_rel_id, "opensearch/0")
-#     harness.update_relation_data(
-#         opensearch_rel_id,
-#         "opensearch",
-#         {"endpoints": "111.222.333.444:9200,555.666.777.888:9200"},
-#     )
-#     harness.update_relation_data(opensearch_rel_id, "opensearch", {"tls-ca": "<cert_data_here>"})
-#     harness.update_relation_data(
-#         opensearch_rel_id, f"{OPENSEARCH_APP_NAME}", {"version": "2.12.1"}
-#     )
+def test_on_install(harness):
+    with (
+        patch("os.remove") as mock_remove,
+        patch("benchmark.benchmark_charm.apt") as mock_apt,
+        patch("subprocess.check_output") as mock_check_output,
+        patch("benchmark.service.DPBenchmarkService.render_service_executable"),
+    ):
+        harness.charm._on_install(None)
+        mock_apt.update.assert_called()
+        mock_apt.add_package.assert_any_call([
+            "python3-prometheus-client",
+            "python3-jinja2",
+            "unzip",
+        ])
+        mock_apt.add_package.assert_any_call(["python3-pip"])
 
-#     responses.add(
-#         method="GET",
-#         url="https://111.222.333.444:9200/_cluster/health",
-#         status=200,
-#         json={"status": "green"},
-#     )
-#     return opensearch_rel_id
+        mock_remove.assert_called_once()
+        mock_check_output.assert_called_once()
+        assert isinstance(harness.charm.unit.status, ActiveStatus)
+    assert harness.charm.database.check() == DatabaseRelationStatus.NOT_AVAILABLE

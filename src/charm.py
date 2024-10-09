@@ -62,7 +62,7 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
 
         if os.path.exists("/usr/lib/python3.12/EXTERNALLY-MANAGED"):
             os.remove("/usr/lib/python3.12/EXTERNALLY-MANAGED")
-        subprocess.check_ouput("pip3 install opensearch-benchmark".split())
+        subprocess.check_output("pip3 install opensearch-benchmark".split())
 
     @override
     def _execute_benchmark_cmd(self, extra_labels, command: str):
