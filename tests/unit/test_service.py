@@ -64,7 +64,7 @@ def test_render_service_file(harness):
         result = service.render_service_file(db)
         assert result
         mock_render.assert_called_once_with(
-            "templates/dpe_benchmark.service.j2",
+            "dpe_benchmark.service.j2",
             "/etc/systemd/system/dpe_benchmark.service",
             {
                 "target_hosts": "localhost",

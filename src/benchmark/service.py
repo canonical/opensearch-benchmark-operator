@@ -60,10 +60,12 @@ class DPBenchmarkService:
     ) -> bool:
         """Render the systemd service file."""
         _render(
-            "templates/" + self.SVC_NAME + ".service.j2",
+            self.SVC_NAME + ".service.j2",
             self.svc_path,
             {
-                "target_hosts": db.db_info.hosts,
+                "target_hosts": ",".join(db.db_info.hosts)
+                if isinstance(db.db_info.hosts, list)
+                else db.db_info.hosts,
                 "workload": db.db_info.workload_name,
                 "threads": db.threads,
                 "clients": db.clients,

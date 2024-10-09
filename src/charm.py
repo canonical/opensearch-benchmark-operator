@@ -24,8 +24,8 @@ from overrides import override
 
 from benchmark.benchmark_charm import DPBenchmarkCharm
 from benchmark.constants import (
-    DatabaseRelationStatus,
     DPBenchmarkExecError,
+    DPBenchmarkExecStatus,
     DPBenchmarkMissingOptionsError,
 )
 from opensearch_relation_manager import OpenSearchDatabaseRelationManager
@@ -41,7 +41,7 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
         super().__init__(*args)
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.config_changed, self._on_config_changed)
-        self.labels = ",".join([self.model.name, self.unit.name])
+        self.labels = ",".join([self.model.name, self.unit.name.replace("/", "-")])
         self._setup_db_relation(["opensearch"])
 
     @override
@@ -75,7 +75,7 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
                 f"Failed: app level reports {self.benchmark_status.app_status()} and service level reports {self.benchmark_status.service_status()}"
             )
             return
-        if status != DatabaseRelationStatus.UNSET:
+        if status != DPBenchmarkExecStatus.UNSET:
             event.fail(
                 "Failed: benchmark is already prepared, stop and clean up the cluster first"
             )
@@ -107,7 +107,7 @@ class OpenSearchBenchmarkOperator(DPBenchmarkCharm):
             )
         except subprocess.CalledProcessError as e:
             logger.warning(f"Process failed with: {e}")
-            self.benchmark_status.set(DatabaseRelationStatus.ERROR)
+            self.benchmark_status.set(DPBenchmarkExecStatus.ERROR)
             raise DPBenchmarkExecError()
         logger.debug("benchmark output: %s", output)
 

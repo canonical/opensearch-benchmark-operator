@@ -141,7 +141,7 @@ class DPBenchmarkCharm(ops.CharmBase):
                 # Nothing to do, we can abandon this event and wait for the next changes
                 # Status will be handled at the end of the event
                 return
-            svc.render_service_file(self.database.script(), options, labels=self.labels)
+            svc.render_service_file(options, labels=self.labels)
             svc.run()
 
     def _on_relation_broken(self, _):
@@ -214,7 +214,7 @@ class DPBenchmarkCharm(ops.CharmBase):
                 f"Failed: app level reports {self.benchmark_status.app_status()} and service level reports {self.benchmark_status.service_status()}"
             )
             return
-        if status != DatabaseRelationStatus.UNSET:
+        if status != DPBenchmarkExecStatus.UNSET:
             event.fail(
                 "Failed: benchmark is already prepared, stop and clean up the cluster first"
             )
@@ -236,10 +236,8 @@ class DPBenchmarkCharm(ops.CharmBase):
         self.unit.status = ops.model.MaintenanceStatus("Setting up benchmark")
         if not (options := self.database.get_execution_options()):
             return False
-        self.SERVICE_CLS().render_service_file(
-            self.database.script(), self.database.chosen_db_type(), options, labels=self.labels
-        )
-        self.benchmark_status.set(DatabaseRelationStatus.PREPARED)
+        self.SERVICE_CLS().render_service_file(options, labels=self.labels)
+        self.benchmark_status.set(DPBenchmarkExecStatus.PREPARED)
 
     def on_run_action(self, event):
         """Run benchmark action."""

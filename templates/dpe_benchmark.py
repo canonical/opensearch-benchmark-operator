@@ -4,11 +4,11 @@
 
 """This method runs the opensearch-benchmark call, collects its output and forwards to prometheus."""
 
-import sys
-import os
 import argparse
+import os
 import signal
 import subprocess
+import sys
 import time
 
 from prometheus_client import Gauge, start_http_server
