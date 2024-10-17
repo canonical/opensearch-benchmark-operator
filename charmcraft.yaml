@@ -1,0 +1,26 @@
+type: charm
+bases:
+  - name: ubuntu
+    channel: "22.04"
+    architectures: [amd64]
+parts:
+  charm:
+    override-build: |
+      rustup default stable
+
+      # Convert subset of poetry.lock to requirements.txt
+      curl -sSL https://install.python-poetry.org | python3 -
+      /root/.local/bin/poetry export --only main,charm-libs --output requirements.txt
+
+      craftctl default
+    charm-strict-dependencies: true
+    charm-requirements: [requirements.txt]
+    charm-entrypoint: src/charm.py
+    build-snaps:
+      - rustup
+    prime:
+      - src/workload_parameter_templates
+    build-packages:
+      - libffi-dev
+      - libssl-dev
+      - pkg-config
