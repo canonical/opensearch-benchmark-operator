@@ -1,0 +1,19 @@
+list-workloads:
+  description: |
+    Lists all the workloads available in this server.
+
+prepare:
+  description: |
+    Prepares the database.
+
+run:
+  description: |
+    Kickstarts the sysbench service in this server.
+
+stop:
+  description: |
+    Stops the sysbench service in this server.
+
+clean:
+  description: |
+    Cleans up the database.

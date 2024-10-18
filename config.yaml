@@ -1,0 +1,32 @@
+options:
+  threads:
+    default: 10
+    type: int
+    description: |
+      Number of concurrent threads that will perform the test.
+  clients:
+    default: 8
+    type: int
+    description: |
+      Number of concurrent clients submitting transactions involved in the testing.
+  duration:
+    default: 0
+    type: int
+    description: |
+      Duration of the test in seconds. If set to 0, it does not stop.
+  run_count:
+    default: 0
+    type: int
+    description: |
+      Number of times to run the test. If set to 0, it does not stop.
+      If both duration and run_count are set, the first to finish will stop the test.
+  workload_name:
+    default: "nyc_taxis"
+    type: string
+    description: |
+      Name of the workload to use.
+  test_mode:
+    default: false
+    type: boolean
+    description: |
+      To set the test in Test mode or not.
