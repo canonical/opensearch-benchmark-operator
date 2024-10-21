@@ -1,0 +1,11 @@
+[Unit]
+Description=Service for controlling opensearch-benchmark
+Wants=network.target
+Requires=network.target
+
+[Service]
+EnvironmentFile=-/etc/environment
+ExecStart=/usr/bin/dpe_benchmark.py --command=run --target_hosts={{ target_hosts }} --workload={{ workload }} --threads={{ threads }} --clients={{ clients }} --db_user={{ db_user }} --db_password={{ db_password }} --duration={{ duration }} --workload_params={{ workload_params }} --extra_labels={{ extra_labels }} {{ extra_config }}
+Restart=no
+TimeoutSec=600
+Type=simple
